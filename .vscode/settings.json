@@ -3,6 +3,7 @@
         "*.as": "ethanon",
         "*.angelscript": "ethanon",
         "*.character": "ethanon",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "vector": "cpp"
     }
 }

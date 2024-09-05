@@ -20,6 +20,10 @@ private:
     Entity* selectedEntity;
     sf::IntRect selectedTile;
     
+    bool isFloatingWindowOpen;
+    sf::Vector2f floatingWindowPosition;
+    sf::Font font;
+
     void handleEvents();
     void update();
     void render();
@@ -28,4 +32,6 @@ private:
     void createTileThumbnails();
     void handleMouseClick(sf::Vector2i mousePos);
     void placeTile(sf::Vector2i mousePos);
+    void handleFloatingWindowClick(sf::Vector2f relativePos);
+    void drawFloatingWindow();
 };
