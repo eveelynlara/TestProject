@@ -24,6 +24,8 @@ private:
     sf::Vector2f floatingWindowPosition;
     sf::Font font;
 
+    int selectedTileIndex = -1; 
+
     void handleEvents();
     void update();
     void render();

@@ -16,9 +16,10 @@ Editor::Editor()
     loadEntities();
     createEntityThumbnails();
 
-    if (!font.loadFromFile("caminho/para/sua/fonte.ttf")) {
-        // Trate o erro de carregamento da fonte
-        std::cerr << "Erro ao carregar a fonte" << std::endl;
+    // Use um caminho relativo ou absoluto para uma fonte que você sabe que existe
+    if (!font.loadFromFile("resources/Arial.ttf")) {
+        std::cerr << "Erro ao carregar a fonte. Usando fonte padrão do sistema." << std::endl;
+        // Use uma fonte de fallback ou continue sem texto
     }
 }
 
@@ -71,6 +72,8 @@ void Editor::drawFloatingWindow() {
     const float windowHeight = 400.f;
     const float padding = 10.f;
     const float titleHeight = 30.f;
+    const float tileSize = 64.f;
+    const float spacing = 2.f;
 
     sf::RectangleShape windowShape(sf::Vector2f(windowWidth, windowHeight));
     windowShape.setPosition(floatingWindowPosition);
@@ -82,6 +85,12 @@ void Editor::drawFloatingWindow() {
     sf::Text title("Select Tile", font, 16);
     title.setPosition(floatingWindowPosition + sf::Vector2f(padding, padding));
     window.draw(title);
+
+    // Add close button
+    sf::RectangleShape closeButton(sf::Vector2f(20, 20));
+    closeButton.setPosition(floatingWindowPosition + sf::Vector2f(windowWidth - 30, 5));
+    closeButton.setFillColor(sf::Color::Red);
+    window.draw(closeButton);
     
     sf::RectangleShape contentArea(sf::Vector2f(windowWidth - 2 * padding, windowHeight - titleHeight - 2 * padding));
     contentArea.setPosition(floatingWindowPosition + sf::Vector2f(padding, titleHeight + padding));
@@ -99,14 +108,19 @@ void Editor::drawFloatingWindow() {
     window.setView(contentView);
 
     float x = 0, y = 0;
-    const float tileSize = 64.f;
-    const float spacing = 2.f;
 
-    for (const auto& thumbnail : tileThumbnails) {
+    for (size_t i = 0; i < tileThumbnails.size(); ++i) {
         sf::RectangleShape tile(sf::Vector2f(tileSize, tileSize));
         tile.setPosition(x, y);
-        tile.setTexture(thumbnail.getTexture());
-        tile.setTextureRect(thumbnail.getTextureRect());
+        tile.setTexture(tileThumbnails[i].getTexture());
+        tile.setTextureRect(tileThumbnails[i].getTextureRect());
+        
+        // Highlight selected tile
+        if (static_cast<int>(i) == selectedTileIndex) {
+            tile.setOutlineColor(sf::Color::Red);
+            tile.setOutlineThickness(2);
+        }
+        
         window.draw(tile);
 
         x += tileSize + spacing;
@@ -195,12 +209,17 @@ void Editor::handleMouseClick(sf::Vector2i mousePos) {
             }
         }
     } else if (isFloatingWindowOpen) {
+        // Check if click is on close button
+        sf::FloatRect closeButtonBounds(floatingWindowPosition + sf::Vector2f(270, 5), sf::Vector2f(20, 20));
+        if (closeButtonBounds.contains(mousePos.x, mousePos.y)) {
+            isFloatingWindowOpen = false;
+            return;
+        }
+        
         // Check if click is inside the floating window
         sf::FloatRect windowBounds(floatingWindowPosition, sf::Vector2f(300, 400));
         if (windowBounds.contains(mousePos.x, mousePos.y)) {
             handleFloatingWindowClick(sf::Vector2f(mousePos) - floatingWindowPosition);
-        } else {
-            isFloatingWindowOpen = false;
         }
     } else {
         // Click in edit area
@@ -228,7 +247,8 @@ void Editor::handleFloatingWindowClick(sf::Vector2f relativePos) {
 
     if (index >= 0 && index < static_cast<int>(tileThumbnails.size())) {
         selectedTile = tileThumbnails[index].getTextureRect();
-        isFloatingWindowOpen = false;
+        selectedTileIndex = index;  // Add this line to keep track of the selected tile
+        // Note: We're not closing the window here anymore
     }
 }
 
