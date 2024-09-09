@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <memory>
+#include <set>
 
 Editor::Editor() : gridSize(32), selectedEntity(nullptr), selectedTileIndex(-1), isFloatingWindowOpen(false) {
     window.create(sf::VideoMode(1024, 768), "Editor de Entidades");
@@ -205,10 +206,20 @@ void Editor::createEntityThumbnails() {
     const float padding = 10.0f;
     float yPos = padding;
 
+    std::set<std::string> addedEntities;  // Para rastrear entidades já adicionadas
+
+    entityThumbnails.clear();  // Limpar miniaturas existentes
+
     for (const auto& entity : entityManager.getEntities()) {
         if (!entity) {
             std::cerr << "Null entity encountered in createEntityThumbnails" << std::endl;
             continue;
+        }
+
+        // Verifica se esta entidade já foi adicionada
+        std::string entityName = entity->getName();
+        if (addedEntities.find(entityName) != addedEntities.end()) {
+            continue;  // Pula esta entidade se já foi adicionada
         }
 
         sf::RectangleShape thumbnail(sf::Vector2f(thumbnailSize, thumbnailSize));
@@ -243,7 +254,11 @@ void Editor::createEntityThumbnails() {
         thumbnail.setPosition(padding, yPos);
         entityThumbnails.push_back(thumbnail);
         yPos += thumbnailSize + padding;
+
+        addedEntities.insert(entityName);  // Marca esta entidade como adicionada
     }
+
+    std::cout << "Criadas " << entityThumbnails.size() << " miniaturas de entidades únicas." << std::endl;
 }
 
 void Editor::createTileThumbnails() {
