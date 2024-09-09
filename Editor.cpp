@@ -6,33 +6,40 @@
 #include <memory>
 #include <set>
 
-Editor::Editor() : gridSize(32), selectedEntity(nullptr), selectedTileIndex(-1), isFloatingWindowOpen(false) {
+Editor::Editor() : gridSize(32), selectedEntity(nullptr), selectedTileIndex(-1), isFloatingWindowOpen(false), selectedEntityIndex(-1) {
     window.create(sf::VideoMode(1024, 768), "Editor de Entidades");
     entityManager.loadEntitiesFromDirectory("entities");
     
     if (entityManager.getEntities().empty()) {
         std::cerr << "No entities loaded. Check your entities directory." << std::endl;
-        // Você pode decidir encerrar o programa aqui ou lidar com isso de outra forma
     }
     
     loadEntities();
     createEntityThumbnails();
     
-    editArea.setSize(sf::Vector2f(800, 768));
-    editArea.setPosition(224, 0);
+    editArea.setSize(sf::Vector2f(700, 768));
+    editArea.setPosition(324, 0);
     editArea.setFillColor(sf::Color(240, 240, 240));
     
+    sidebarArea.setSize(sf::Vector2f(324, 768));
+    sidebarArea.setPosition(0, 0);
+    sidebarArea.setFillColor(sf::Color(220, 220, 220));
+    
     createGrid();
+    
+    if (!font.loadFromFile("path/to/your/font.ttf")) {
+        std::cerr << "Failed to load font" << std::endl;
+    }
 }
 
 void Editor::createGrid() {
-    for (float x = 0; x <= 800; x += gridSize) {
+    for (float x = 0; x <= 700; x += gridSize) {
         gridLines.emplace_back(sf::Vector2f(x + editArea.getPosition().x, editArea.getPosition().y));
         gridLines.emplace_back(sf::Vector2f(x + editArea.getPosition().x, editArea.getPosition().y + 768));
     }
     for (float y = 0; y <= 768; y += gridSize) {
         gridLines.emplace_back(sf::Vector2f(editArea.getPosition().x, y + editArea.getPosition().y));
-        gridLines.emplace_back(sf::Vector2f(editArea.getPosition().x + 800, y + editArea.getPosition().y));
+        gridLines.emplace_back(sf::Vector2f(editArea.getPosition().x + 700, y + editArea.getPosition().y));
     }
 }
 
@@ -53,6 +60,8 @@ void Editor::handleEvents() {
             if (event.mouseButton.button == sf::Mouse::Left) {
                 handleMouseClick(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
             }
+        } else if (event.type == sf::Event::KeyPressed) {
+            handleKeyPress(event.key.code);
         }
     }
 }
@@ -64,8 +73,8 @@ void Editor::update() {
 void Editor::render() {
     window.clear(sf::Color::White);
     
-    window.draw(projectArea);
     window.draw(editArea);
+    window.draw(sidebarArea);
     
     window.draw(gridLines.data(), gridLines.size(), sf::PrimitiveType::Lines);
 
@@ -73,15 +82,80 @@ void Editor::render() {
         entity->draw(window);
     }
 
-    for (const auto& thumbnail : entityThumbnails) {
-        window.draw(thumbnail);
-    }
+    renderSidebar();
 
     if (isFloatingWindowOpen && selectedEntity) {
         drawFloatingWindow();
     }
 
     window.display();
+}
+
+void Editor::renderSidebar() {
+    const float thumbnailSize = 100.0f;
+    const float padding = 10.0f;
+    float yPos = padding;
+
+    for (size_t i = 0; i < entityThumbnails.size(); ++i) {
+        sf::RectangleShape& thumbnail = entityThumbnails[i];
+        thumbnail.setPosition(padding, yPos);
+        window.draw(thumbnail);
+
+        // Destacar a entidade selecionada
+        if (static_cast<int>(i) == selectedEntityIndex) {
+            sf::RectangleShape highlight(sf::Vector2f(thumbnailSize, thumbnailSize));
+            highlight.setPosition(padding, yPos);
+            highlight.setFillColor(sf::Color(255, 255, 0, 100));
+            window.draw(highlight);
+        }
+
+        // Desenhar o nome da entidade
+        sf::Text nameText(entityManager.getEntities()[i]->getName(), font, 12);
+        nameText.setPosition(padding, yPos + thumbnailSize + 5);
+        nameText.setFillColor(sf::Color::Black);
+        window.draw(nameText);
+
+        yPos += thumbnailSize + padding + 20; // 20 para o texto
+    }
+}
+
+void Editor::handleKeyPress(sf::Keyboard::Key key) {
+    switch (key) {
+        case sf::Keyboard::Up:
+            if (selectedEntityIndex > 0) {
+                selectEntity(selectedEntityIndex - 1);
+            }
+            break;
+        case sf::Keyboard::Down:
+            if (selectedEntityIndex < static_cast<int>(entityManager.getEntities().size()) - 1) {
+                selectEntity(selectedEntityIndex + 1);
+            }
+            break;
+        case sf::Keyboard::Enter:
+            if (selectedEntityIndex >= 0) {
+                showEntityDetails();
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void Editor::selectEntity(int index) {
+    if (index >= 0 && index < static_cast<int>(entityManager.getEntities().size())) {
+        selectedEntityIndex = index;
+        selectedEntity = entityManager.getEntities()[index].get();
+        createTileThumbnails();
+        selectedTileIndex = -1;
+        std::cout << "Entidade selecionada: " << selectedEntity->getName() << std::endl;
+    }
+}
+
+void Editor::showEntityDetails() {
+    if (selectedEntity) {
+        isFloatingWindowOpen = true;
+        floatingWindowPosition = sf::Vector2f(324, 0);
+    }
 }
 
 void Editor::drawFloatingWindow() {
@@ -92,6 +166,11 @@ void Editor::drawFloatingWindow() {
         floatingWindow.setPosition(floatingWindowPosition);
         floatingWindow.setFillColor(sf::Color(200, 200, 200));
         window.draw(floatingWindow);
+
+        sf::Text nameText(selectedEntity->getName(), font, 20);
+        nameText.setPosition(floatingWindowPosition.x + 10, floatingWindowPosition.y + 10);
+        nameText.setFillColor(sf::Color::Black);
+        window.draw(nameText);
 
         if (selectedEntity->hasSprite()) {
             const sf::Texture* texture = selectedEntity->getTexture();
@@ -133,12 +212,6 @@ void Editor::drawFloatingWindow() {
                         window.draw(highlight);
                     }
                 }
-
-                // Adicionar texto informativo
-                sf::Text infoText("Click on a tile to select it", font, 16);
-                infoText.setPosition(floatingWindowPosition.x + 10, floatingWindowPosition.y + 20);
-                infoText.setFillColor(sf::Color::Black);
-                window.draw(infoText);
             }
         } else {
             // Entidade sem sprite (apenas colisão)
@@ -159,9 +232,37 @@ void Editor::drawFloatingWindow() {
             window.draw(collisionShape);
 
             sf::Text infoText("Collision-only entity", font, 16);
-            infoText.setPosition(floatingWindowPosition.x + 10, floatingWindowPosition.y + 20);
+            infoText.setPosition(floatingWindowPosition.x + 10, floatingWindowPosition.y + 40);
             infoText.setFillColor(sf::Color::Black);
             window.draw(infoText);
+        }
+    }
+}
+
+void Editor::handleMouseClick(sf::Vector2i mousePos) {
+    if (sidebarArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+        // Clique na barra lateral
+        for (size_t i = 0; i < entityThumbnails.size(); ++i) {
+            if (entityThumbnails[i].getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+                selectEntity(i);
+                showEntityDetails();
+                return;
+            }
+        }
+    } else if (isFloatingWindowOpen) {
+        // Verificar se o clique foi na janela flutuante
+        sf::FloatRect windowBounds(floatingWindowPosition, sf::Vector2f(400, 500));
+        if (windowBounds.contains(mousePos.x, mousePos.y)) {
+            handleFloatingWindowClick(sf::Vector2f(mousePos) - floatingWindowPosition);
+        }
+    } else if (editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+        // Clique na área de edição
+        if (selectedEntity && selectedTileIndex >= 0) {
+            std::cout << "Tentando colocar entidade na posição: (" << mousePos.x << ", " << mousePos.y << ")" << std::endl;
+            placeEntity(mousePos);
+        } else {
+            std::cout << "Não foi possível colocar a entidade. selectedEntity: " << (selectedEntity ? "true" : "false")
+                      << ", selectedTileIndex: " << selectedTileIndex << std::endl;
         }
     }
 }
@@ -350,40 +451,31 @@ void Editor::handleFloatingWindowClick(sf::Vector2f localPosition) {
     }
 }
 
-void Editor::handleMouseClick(sf::Vector2i mousePos) {
-    if (mousePos.x < 224) {  // Área das miniaturas de entidades
-        for (size_t i = 0; i < entityThumbnails.size(); ++i) {
-            if (entityThumbnails[i].getGlobalBounds().contains(mousePos.x, mousePos.y)) {
-                selectedEntity = entityManager.getEntities()[i].get();
-                createTileThumbnails();
-                isFloatingWindowOpen = true;
-                floatingWindowPosition = sf::Vector2f(224, 0);
-                selectedTileIndex = -1;  // Resetar a seleção de tile
-                std::cout << "Entidade selecionada: " << i << std::endl;
-                std::cout << "Tiles disponíveis:" << std::endl;
-                const auto& spriteDefinitions = selectedEntity->getSpriteDefinitions();
-                for (size_t j = 0; j < spriteDefinitions.size(); ++j) {
-                    const auto& spriteDef = spriteDefinitions[j];
-                    std::cout << "Tile " << j << ": (" << spriteDef.rect.left << ", " << spriteDef.rect.top << ", " 
-                              << spriteDef.rect.width << ", " << spriteDef.rect.height << ")" << std::endl;
-                }
-                return;
-            }
-        }
-    } else if (isFloatingWindowOpen) {
-        // Verificar se o clique foi na janela flutuante
-        sf::FloatRect windowBounds(floatingWindowPosition, sf::Vector2f(400, 500));
-        if (windowBounds.contains(mousePos.x, mousePos.y)) {
-            handleFloatingWindowClick(sf::Vector2f(mousePos) - floatingWindowPosition);
-        }
-    } else if (editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
-        // Clique na área de edição
-        if (selectedEntity && selectedTileIndex >= 0) {
-            std::cout << "Tentando colocar entidade na posição: (" << mousePos.x << ", " << mousePos.y << ")" << std::endl;
-            placeEntity(mousePos);
-        } else {
-            std::cout << "Não foi possível colocar a entidade. selectedEntity: " << (selectedEntity ? "true" : "false")
-                      << ", selectedTileIndex: " << selectedTileIndex << std::endl;
-        }
+void Editor::saveScene(const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Não foi possível abrir o arquivo para salvar a cena." << std::endl;
+        return;
     }
+
+    for (const auto& entity : placedEntities) {
+        file << entity->getName() << " " 
+             << entity->getPosition().x << " " 
+             << entity->getPosition().y << " ";
+        
+        if (entity->hasSprite()) {
+            const sf::IntRect& textureRect = entity->getSprite().getTextureRect();
+            file << textureRect.left << " " 
+                 << textureRect.top << " " 
+                 << textureRect.width << " " 
+                 << textureRect.height;
+        } else {
+            file << "0 0 0 0";  // Placeholder para entidades sem sprite
+        }
+        
+        file << std::endl;
+    }
+
+    file.close();
+    std::cout << "Cena salva em " << filename << std::endl;
 }

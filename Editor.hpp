@@ -15,11 +15,12 @@ private:
     
     sf::RectangleShape projectArea;
     sf::RectangleShape editArea;
+    sf::RectangleShape sidebarArea;  // Nova área para a lista de entidades
     
     std::vector<sf::RectangleShape> entityThumbnails;
     std::vector<sf::RectangleShape> tileThumbnails;
     std::vector<sf::RectangleShape> placedTiles;
-    std::vector<std::unique_ptr<Entity>> placedEntities;;
+    std::vector<std::unique_ptr<Entity>> placedEntities;
     
     Entity* selectedEntity;
     sf::IntRect selectedTile;
@@ -29,6 +30,7 @@ private:
     sf::Font font;
 
     int selectedTileIndex = -1;
+    int selectedEntityIndex = -1;  // Índice da entidade selecionada na lista lateral
 
     // Grade
     int gridSize;
@@ -47,4 +49,10 @@ private:
     void drawFloatingWindow();
     void saveScene(const std::string& filename);
     void createGrid();
+
+    // Novas funções
+    void renderSidebar();
+    void handleKeyPress(sf::Keyboard::Key key);
+    void selectEntity(int index);
+    void showEntityDetails();
 };
