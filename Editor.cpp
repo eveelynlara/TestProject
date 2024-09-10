@@ -5,6 +5,11 @@
 #include <sstream>
 #include <memory>
 #include <set>
+#include <tinyxml2.h>
+#include <cstdio>
+#include <stdexcept>
+#include <string>
+#include <array>
 
 namespace fs = std::filesystem;
 
@@ -52,6 +57,73 @@ void Editor::loadFileStructure(const std::string& path, FileNode& node) {
             node.children.push_back(childNode);
             std::cout << "Adicionado: " << childNode.name << (childNode.isDirectory ? " (diretório)" : " (arquivo)") << std::endl;
         }
+    }
+}
+
+void Editor::createMenu() {
+    if (!menuFont.loadFromFile("/System/Library/Fonts/Helvetica.ttc")) {
+        std::cerr << "Falha ao carregar a fonte do menu" << std::endl;
+    }
+
+    sf::Text fileMenu;
+    fileMenu.setFont(menuFont);
+    fileMenu.setString("File");
+    fileMenu.setCharacterSize(20);
+    fileMenu.setFillColor(sf::Color::Black);
+    fileMenu.setPosition(10, 5);
+    menuItems.push_back(fileMenu);
+
+    isMenuOpen = false;
+}
+
+void Editor::handleMenu() {
+    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+
+    if (sf::Mouse::isButtonPressed(sf::Mouse::Left)) {
+        for (const auto& menuItem : menuItems) {
+            if (menuItem.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+                if (menuItem.getString() == "File") {
+                    isMenuOpen = !isMenuOpen;
+                }
+            }
+        }
+
+        if (isMenuOpen) {
+            sf::FloatRect menuBounds = menuItems[0].getGlobalBounds();
+            sf::Vector2f savePos(menuBounds.left, menuBounds.top + menuBounds.height);
+            if (sf::FloatRect(savePos.x, savePos.y, 100, 30).contains(mousePos.x, mousePos.y)) {
+                showSaveFileDialog();
+            }
+        }
+    }
+}
+
+void Editor::showSaveFileDialog() {
+    // No macOS, usaremos o comando 'osascript' para abrir uma caixa de diálogo nativa
+    std::string command = "osascript -e 'tell application \"System Events\" to activate' -e 'tell application \"System Events\" to set filePath to choose file name with prompt \"Save Scene As:\" default name \"scene.esc\"' -e 'return POSIX path of filePath'";
+    
+    FILE* pipe = popen(command.c_str(), "r");
+    if (!pipe) {
+        std::cerr << "Erro ao abrir o diálogo de salvamento" << std::endl;
+        return;
+    }
+    
+    char buffer[256];
+    std::string result = "";
+    while (!feof(pipe)) {
+        if (fgets(buffer, 256, pipe) != NULL)
+            result += buffer;
+    }
+    pclose(pipe);
+    
+    // Remove a nova linha no final do caminho do arquivo
+    if (!result.empty() && result[result.length()-1] == '\n') {
+        result.erase(result.length()-1);
+    }
+    
+    if (!result.empty()) {
+        saveFilePath = result;
+        exportScene(saveFilePath);
     }
 }
 
@@ -187,6 +259,105 @@ void Editor::toggleNodeOpen(FileNode& node) {
     }
 }
 
+void Editor::exportScene(const std::string& filename) {
+    tinyxml2::XMLDocument doc;
+    
+    tinyxml2::XMLDeclaration* decl = doc.NewDeclaration();
+    doc.InsertFirstChild(decl);
+
+    tinyxml2::XMLElement* root = doc.NewElement("Ethanon");
+    doc.InsertEndChild(root);
+
+    // Scene Properties
+    tinyxml2::XMLElement* sceneProps = doc.NewElement("SceneProperties");
+    sceneProps->SetAttribute("lightIntensity", "2");
+    sceneProps->SetAttribute("parallaxIntensity", "0");
+    root->InsertEndChild(sceneProps);
+
+    tinyxml2::XMLElement* ambient = doc.NewElement("Ambient");
+    ambient->SetAttribute("r", "1");
+    ambient->SetAttribute("g", "1");
+    ambient->SetAttribute("b", "1");
+    sceneProps->InsertEndChild(ambient);
+
+    tinyxml2::XMLElement* zAxis = doc.NewElement("ZAxisDirection");
+    zAxis->SetAttribute("x", "0");
+    zAxis->SetAttribute("y", "-1");
+    sceneProps->InsertEndChild(zAxis);
+
+    // Entities in Scene
+    tinyxml2::XMLElement* entitiesInScene = doc.NewElement("EntitiesInScene");
+    root->InsertEndChild(entitiesInScene);
+
+    int entityId = 1;
+    for (const auto& entity : placedEntities) {
+        tinyxml2::XMLElement* entityElement = doc.NewElement("Entity");
+        entityElement->SetAttribute("id", entityId++);
+        entityElement->SetAttribute("spriteFrame", entity->getSelectedTileIndex());
+        entitiesInScene->InsertEndChild(entityElement);
+
+        // Extrair apenas o nome do arquivo da entidade
+        std::string entityFileName = entity->getName();
+        size_t lastSlash = entityFileName.find_last_of("/\\");
+        if (lastSlash != std::string::npos) {
+            entityFileName = entityFileName.substr(lastSlash + 1);
+        }
+
+        tinyxml2::XMLElement* entityNameElement = doc.NewElement("EntityName");
+        entityNameElement->SetText(entityFileName.c_str());
+        entityElement->InsertEndChild(entityNameElement);
+
+        tinyxml2::XMLElement* position = doc.NewElement("Position");
+        position->SetAttribute("x", entity->getPosition().x);
+        position->SetAttribute("y", entity->getPosition().y);
+        position->SetAttribute("z", 0);
+        position->SetAttribute("angle", 0);
+        entityElement->InsertEndChild(position);
+
+        tinyxml2::XMLElement* entityDetails = doc.NewElement("Entity");
+        entityElement->InsertEndChild(entityDetails);
+
+        tinyxml2::XMLElement* fileName = doc.NewElement("FileName");
+        fileName->SetText(entityFileName.c_str());
+        entityDetails->InsertEndChild(fileName);
+
+        // Adicionar CustomData
+        tinyxml2::XMLElement* customData = doc.NewElement("CustomData");
+        entityDetails->InsertEndChild(customData);
+
+        // Adicionar variáveis de CustomData
+        addCustomDataVariable(doc, customData, "uint", "allowDecals", "1");
+        addCustomDataVariable(doc, customData, "string", "material", "stone");
+    }
+
+    // Salvar o documento XML
+    tinyxml2::XMLError result = doc.SaveFile(filename.c_str());
+    if (result == tinyxml2::XML_SUCCESS) {
+        std::cout << "Cena exportada com sucesso para " << filename << std::endl;
+    } else {
+        std::cerr << "Erro ao exportar a cena para " << filename << std::endl;
+    }
+}
+
+// Função auxiliar para adicionar variáveis de CustomData
+void Editor::addCustomDataVariable(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* customData, 
+                                   const std::string& type, const std::string& name, const std::string& value) {
+    tinyxml2::XMLElement* variable = doc.NewElement("Variable");
+    customData->InsertEndChild(variable);
+
+    tinyxml2::XMLElement* typeElement = doc.NewElement("Type");
+    typeElement->SetText(type.c_str());
+    variable->InsertEndChild(typeElement);
+
+    tinyxml2::XMLElement* nameElement = doc.NewElement("Name");
+    nameElement->SetText(name.c_str());
+    variable->InsertEndChild(nameElement);
+
+    tinyxml2::XMLElement* valueElement = doc.NewElement("Value");
+    valueElement->SetText(value.c_str());
+    variable->InsertEndChild(valueElement);
+}
+
 void Editor::selectEntity(const std::string& path) {
     Entity* entity = entityManager.getEntityByPath(path);
     if (entity) {
@@ -203,11 +374,13 @@ void Editor::selectEntity(const std::string& path) {
 }
 
 void Editor::run() {
+    createMenu();
     while (window.isOpen()) {
         sf::Vector2i mousePos = sf::Mouse::getPosition(window);
         updateEntityPreview(mousePos);
         
         handleEvents();
+        handleMenu();
         update();
         render();
     }
@@ -257,6 +430,27 @@ void Editor::render() {
     if (isFloatingWindowOpen && selectedEntity) {
         drawFloatingWindow();
     }
+    
+    // Desenhar menu
+    for (const auto& menuItem : menuItems) {
+        window.draw(menuItem);
+    }
+
+    if (isMenuOpen) {
+        sf::RectangleShape menuBackground(sf::Vector2f(100, 30));
+        menuBackground.setFillColor(sf::Color(200, 200, 200));
+        sf::FloatRect menuBounds = menuItems[0].getGlobalBounds();
+        menuBackground.setPosition(menuBounds.left, menuBounds.top + menuBounds.height);
+        window.draw(menuBackground);
+
+        sf::Text saveOption;
+        saveOption.setFont(menuFont);
+        saveOption.setString("Save");
+        saveOption.setCharacterSize(18);
+        saveOption.setFillColor(sf::Color::Black);
+        saveOption.setPosition(menuBackground.getPosition() + sf::Vector2f(5, 5));
+        window.draw(saveOption);
+    }
 
     window.display();
 }
@@ -283,6 +477,11 @@ void Editor::handleKeyPress(sf::Keyboard::Key key) {
         case sf::Keyboard::Enter:
             if (selectedNodeIndex >= 0) {
                 selectEntityAtIndex(selectedNodeIndex);
+            }
+            break;
+        case sf::Keyboard::S:
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::LSystem) || sf::Keyboard::isKeyPressed(sf::Keyboard::RSystem)) {
+                showSaveFileDialog();
             }
             break;
         default:

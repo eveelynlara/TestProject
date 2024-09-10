@@ -33,6 +33,8 @@ public:
     // Adicionado: Método para obter o nome da entidade
     const std::string& getName() const { return name; }
 
+    int getSelectedTileIndex() const { return selectedTileIndex; }
+
 private:
     sf::Sprite sprite;
     sf::Texture texture;
@@ -41,6 +43,8 @@ private:
     std::map<std::string, std::string> customData;
     std::string spritePath;
     sf::Vector2f collisionSize;
+
+    int selectedTileIndex;
 
     void loadTextureAtlas(const std::string& atlasPath, int cutX, int cutY);
     void loadCustomData(const tinyxml2::XMLElement* entityElement);

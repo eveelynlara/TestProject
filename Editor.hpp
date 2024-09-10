@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include "EntityManager.hpp"
+#include <tinyxml2.h>
 #include <vector>
 #include <string>
 #include <map>
@@ -16,6 +17,7 @@ class Editor {
 public:
     Editor();
     void run();
+    void exportScene(const std::string& filename);
 
 private:
     sf::RenderWindow window;
@@ -29,6 +31,11 @@ private:
     std::vector<sf::RectangleShape> tileThumbnails;
     std::vector<sf::RectangleShape> placedTiles;
     std::vector<std::unique_ptr<Entity>> placedEntities;
+
+    sf::Font menuFont;
+    std::vector<sf::Text> menuItems;
+    bool isMenuOpen;
+    std::string saveFilePath;
     
     Entity* selectedEntity;
     int selectedTileIndex = -1;
@@ -79,4 +86,9 @@ private:
     void collectEntityPaths(const FileNode& node, std::vector<std::string>& paths);
     std::string selectedEntityPath;
     void updateEntityPreview(sf::Vector2i mousePos);
+    void addCustomDataVariable(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* customData, 
+                            const std::string& type, const std::string& name, const std::string& value);
+    void createMenu();
+    void handleMenu();
+    void showSaveFileDialog();
 };
