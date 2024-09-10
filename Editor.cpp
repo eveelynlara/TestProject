@@ -116,14 +116,16 @@ void Editor::handleMouseClick(sf::Vector2i mousePos) {
         sf::FloatRect windowBounds(floatingWindowPosition, sf::Vector2f(400, 500));
         if (windowBounds.contains(mousePos.x, mousePos.y)) {
             handleFloatingWindowClick(sf::Vector2f(mousePos) - floatingWindowPosition);
+        } else if (editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+            if (selectedEntity && selectedTileIndex >= 0) {
+                std::cout << "Tentando colocar entidade na posição: (" << mousePos.x << ", " << mousePos.y << ")" << std::endl;
+                placeEntity(mousePos);
+            }
         }
     } else if (editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
         if (selectedEntity && selectedTileIndex >= 0) {
             std::cout << "Tentando colocar entidade na posição: (" << mousePos.x << ", " << mousePos.y << ")" << std::endl;
             placeEntity(mousePos);
-        } else {
-            std::cout << "Não foi possível colocar a entidade. selectedEntity: " << (selectedEntity ? "true" : "false")
-                      << ", selectedTileIndex: " << selectedTileIndex << std::endl;
         }
     }
 }
@@ -202,6 +204,9 @@ void Editor::selectEntity(const std::string& path) {
 
 void Editor::run() {
     while (window.isOpen()) {
+        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+        updateEntityPreview(mousePos);
+        
         handleEvents();
         update();
         render();
@@ -215,8 +220,8 @@ void Editor::handleEvents() {
             window.close();
         } else if (event.type == sf::Event::MouseButtonPressed) {
             if (event.mouseButton.button == sf::Mouse::Left) {
-                std::cout << "Mouse clicado em: (" << event.mouseButton.x << ", " << event.mouseButton.y << ")" << std::endl;
-                handleMouseClick(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
+                sf::Vector2i mousePos(event.mouseButton.x, event.mouseButton.y);
+                handleMouseClick(mousePos);
             }
         } else if (event.type == sf::Event::KeyPressed) {
             std::cout << "Tecla pressionada: " << event.key.code << std::endl;
@@ -239,8 +244,14 @@ void Editor::render() {
 
     renderSidebar();
 
+    // Renderize as entidades colocadas
     for (const auto& entity : placedEntities) {
         entity->draw(window);
+    }
+
+    // Renderize o preview da entidade
+    if (selectedEntity && selectedTileIndex >= 0) {
+        window.draw(entityPreview);
     }
 
     if (isFloatingWindowOpen && selectedEntity) {
@@ -442,6 +453,24 @@ void Editor::placeEntity(sf::Vector2i mousePos) {
 
     std::cout << "Entidade colocada na posição: (" << (editArea.getPosition().x + gridX) << ", " << (editArea.getPosition().y + gridY) << ")" << std::endl;
     std::cout << "Total de entidades colocadas: " << placedEntities.size() << std::endl;
+}
+
+void Editor::updateEntityPreview(sf::Vector2i mousePos) {
+    if (selectedEntity && selectedTileIndex >= 0 && editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+        sf::Vector2f adjustedPos(mousePos.x - editArea.getPosition().x, mousePos.y - editArea.getPosition().y);
+        int gridX = static_cast<int>(adjustedPos.x / gridSize) * gridSize;
+        int gridY = static_cast<int>(adjustedPos.y / gridSize) * gridSize;
+
+        entityPreview.setPosition(editArea.getPosition().x + gridX, editArea.getPosition().y + gridY);
+        
+        const auto& spriteDefinitions = selectedEntity->getSpriteDefinitions();
+        if (selectedTileIndex < spriteDefinitions.size()) {
+            entityPreview.setTextureRect(spriteDefinitions[selectedTileIndex].rect);
+        }
+
+        entityPreview.setTexture(*selectedEntity->getTexture());
+        entityPreview.setColor(sf::Color(255, 255, 255, 128)); // Semi-transparente
+    }
 }
 
 void Editor::createTileThumbnails() {

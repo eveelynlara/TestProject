@@ -24,6 +24,7 @@ private:
     sf::RectangleShape projectArea;
     sf::RectangleShape editArea;
     sf::RectangleShape sidebarArea;
+    sf::Sprite entityPreview;
     
     std::vector<sf::RectangleShape> tileThumbnails;
     std::vector<sf::RectangleShape> placedTiles;
@@ -77,4 +78,5 @@ private:
     void selectEntityAtIndex(int index);
     void collectEntityPaths(const FileNode& node, std::vector<std::string>& paths);
     std::string selectedEntityPath;
+    void updateEntityPreview(sf::Vector2i mousePos);
 };
