@@ -75,7 +75,8 @@ Entity::Entity(const std::string& filename) {
 Entity::Entity(const Entity& other)
     : sprite(other.sprite), texture(other.texture), name(other.name),
       spriteDefinitions(other.spriteDefinitions), customData(other.customData),
-      spritePath(other.spritePath), collisionSize(other.collisionSize) 
+      spritePath(other.spritePath), collisionSize(other.collisionSize),
+      selectedTileIndex(other.selectedTileIndex) 
 {
     sprite.setTexture(texture);
 }

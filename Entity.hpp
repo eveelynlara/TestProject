@@ -22,6 +22,8 @@ public:
     const std::vector<SpriteDefinition>& getSpriteDefinitions() const { return spriteDefinitions; }
     const sf::Texture* getTexture() const { return sprite.getTexture(); }
     void setTextureRect(const sf::IntRect& rect) { sprite.setTextureRect(rect); }
+
+    void setSelectedTileIndex(int index) { selectedTileIndex = index; }
     
     // Methods for custom data
     void setCustomData(const std::string& key, const std::string& value);
@@ -44,7 +46,7 @@ private:
     std::string spritePath;
     sf::Vector2f collisionSize;
 
-    int selectedTileIndex;
+    int selectedTileIndex = -1;
 
     void loadTextureAtlas(const std::string& atlasPath, int cutX, int cutY);
     void loadCustomData(const tinyxml2::XMLElement* entityElement);

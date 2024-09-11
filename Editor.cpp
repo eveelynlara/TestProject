@@ -629,6 +629,16 @@ void Editor::drawFloatingWindow() {
     }
 }
 
+void Editor::updatePlacedEntitySpriteFrame(Entity* entity, int tileIndex) {
+    if (entity && tileIndex >= 0) {
+        entity->setSelectedTileIndex(tileIndex);
+        const auto& spriteDefinitions = entity->getSpriteDefinitions();
+        if (tileIndex < spriteDefinitions.size()) {
+            entity->setTextureRect(spriteDefinitions[tileIndex].rect);
+        }
+    }
+}
+
 void Editor::placeEntity(sf::Vector2i mousePos) {
     if (!selectedEntity || selectedTileIndex < 0) {
         std::cout << "Não foi possível colocar a entidade. selectedEntity: " << (selectedEntity ? "true" : "false")
@@ -643,10 +653,7 @@ void Editor::placeEntity(sf::Vector2i mousePos) {
     auto newEntity = std::make_unique<Entity>(*selectedEntity);
     newEntity->setPosition(editArea.getPosition().x + gridX, editArea.getPosition().y + gridY);
     
-    const auto& spriteDefinitions = selectedEntity->getSpriteDefinitions();
-    if (selectedTileIndex < spriteDefinitions.size()) {
-        newEntity->setTextureRect(spriteDefinitions[selectedTileIndex].rect);
-    }
+    updatePlacedEntitySpriteFrame(newEntity.get(), selectedTileIndex);
 
     placedEntities.push_back(std::move(newEntity));
 

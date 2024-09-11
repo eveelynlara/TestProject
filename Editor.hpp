@@ -54,7 +54,8 @@ private:
     FileNode rootNode;
     int selectedNodeIndex;
     int currentNodeIndex = 0;
-    
+
+    void updatePlacedEntitySpriteFrame(Entity* entity, int tileIndex);
     void placeEntity(sf::Vector2i mousePos);
     void handleEvents();
     void update();
