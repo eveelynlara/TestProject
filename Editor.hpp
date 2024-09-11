@@ -14,6 +14,9 @@ struct FileNode {
 };
 
 class Editor {
+    sf::Vector2f currentGridSize;
+    bool showGrid;
+
 public:
     Editor();
     void run();
@@ -27,7 +30,7 @@ private:
     sf::RectangleShape editArea;
     sf::RectangleShape sidebarArea;
     sf::Sprite entityPreview;
-    
+
     std::vector<sf::RectangleShape> tileThumbnails;
     std::vector<sf::RectangleShape> placedTiles;
     std::vector<std::unique_ptr<Entity>> placedEntities;
@@ -67,6 +70,9 @@ private:
     void handleFloatingWindowClick(sf::Vector2f relativePos);
     void drawFloatingWindow();
     void saveScene(const std::string& filename);
+    void updateGridSize();
+    void toggleGrid();
+    void drawGrid();
     void createGrid();
 
     // Funções modificadas ou novas
@@ -87,9 +93,13 @@ private:
     void collectEntityPaths(const FileNode& node, std::vector<std::string>& paths);
     std::string selectedEntityPath;
     void updateEntityPreview(sf::Vector2i mousePos);
-    void addCustomDataVariable(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* customData, 
-                            const std::string& type, const std::string& name, const std::string& value);
+    void renderInvisibleEntity(sf::RenderWindow &window, const Entity *entity);
+    void addCustomDataVariable(tinyxml2::XMLDocument &doc, tinyxml2::XMLElement *customData,
+                               const std::string &type, const std::string &name, const std::string &value);
     void createMenu();
     void handleMenu();
     void showSaveFileDialog();
+    
+    // Nova função adicionada
+    void renderPlacedEntities();
 };

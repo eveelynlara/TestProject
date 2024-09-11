@@ -16,9 +16,11 @@ public:
     Entity(const Entity& other);  // Copy constructor
 
     void draw(sf::RenderWindow& window) const;
+    sf::Vector2f getSize() const;
     sf::Vector2f getPosition() const;
     void setPosition(float x, float y);
-    const sf::Sprite& getSprite() const { return sprite; }
+    bool loadFromFile(const std::string &filename);
+    const sf::Sprite &getSprite() const { return sprite; }
     const std::vector<SpriteDefinition>& getSpriteDefinitions() const { return spriteDefinitions; }
     const sf::Texture* getTexture() const { return sprite.getTexture(); }
     void setTextureRect(const sf::IntRect& rect) { sprite.setTextureRect(rect); }
@@ -29,13 +31,13 @@ public:
     void setCustomData(const std::string& key, const std::string& value);
     std::string getCustomData(const std::string& key) const;
 
-    bool hasSprite() const { return !spritePath.empty(); }
-    sf::Vector2f getCollisionSize() const { return collisionSize; }
-
     // Adicionado: Método para obter o nome da entidade
     const std::string& getName() const { return name; }
 
     int getSelectedTileIndex() const { return selectedTileIndex; }
+
+    bool hasSprite() const;
+    sf::Vector2f getCollisionSize() const;
 
 private:
     sf::Sprite sprite;

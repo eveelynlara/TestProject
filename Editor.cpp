@@ -308,8 +308,9 @@ void Editor::exportScene(const std::string& filename) {
         entityElement->InsertEndChild(entityNameElement);
 
         tinyxml2::XMLElement* position = doc.NewElement("Position");
-        position->SetAttribute("x", entity->getPosition().x);
-        position->SetAttribute("y", entity->getPosition().y);
+        sf::Vector2f entityPos = entity->getPosition();
+        position->SetAttribute("x", static_cast<int>(entityPos.x));
+        position->SetAttribute("y", static_cast<int>(entityPos.y));
         position->SetAttribute("z", 0);
         position->SetAttribute("angle", 0);
         entityElement->InsertEndChild(position);
@@ -339,6 +340,22 @@ void Editor::exportScene(const std::string& filename) {
     }
 }
 
+void Editor::renderPlacedEntities() {
+    for (const auto& entity : placedEntities) {
+        sf::Vector2f pos = entity->getPosition();
+        pos.x += editArea.getPosition().x;
+        pos.y += editArea.getPosition().y;
+        
+        if (entity->hasSprite()) {
+            sf::Sprite sprite = entity->getSprite();
+            sprite.setPosition(pos);
+            window.draw(sprite);
+        } else {
+            renderInvisibleEntity(window, entity.get());
+        }
+    }
+}
+
 // Função auxiliar para adicionar variáveis de CustomData
 void Editor::addCustomDataVariable(tinyxml2::XMLDocument& doc, tinyxml2::XMLElement* customData, 
                                    const std::string& type, const std::string& name, const std::string& value) {
@@ -362,8 +379,9 @@ void Editor::selectEntity(const std::string& path) {
     Entity* entity = entityManager.getEntityByPath(path);
     if (entity) {
         selectedEntity = entity;
+        updateGridSize();
         selectedEntityPath = path;
-        selectedTileIndex = -1;
+        selectedTileIndex = 0;
         isFloatingWindowOpen = true;
         floatingWindowPosition = sf::Vector2f(324, 0);
         createTileThumbnails();
@@ -400,6 +418,16 @@ void Editor::handleEvents() {
             std::cout << "Tecla pressionada: " << event.key.code << std::endl;
             handleKeyPress(event.key.code);
         }
+        if (event.type == sf::Event::KeyPressed) {
+            if (event.key.code == sf::Keyboard::LShift || event.key.code == sf::Keyboard::RShift) {
+                toggleGrid();
+            }
+        }
+        if (event.type == sf::Event::KeyReleased) {
+            if (event.key.code == sf::Keyboard::LShift || event.key.code == sf::Keyboard::RShift) {
+                toggleGrid();
+            }
+        }
     }
 }
 
@@ -417,12 +445,19 @@ void Editor::render() {
 
     renderSidebar();
 
-    // Renderize as entidades colocadas
-    for (const auto& entity : placedEntities) {
-        entity->draw(window);
+    if (showGrid) {
+        drawGrid();
     }
 
+    // Renderize as entidades colocadas
+    renderPlacedEntities();
+
+
     // Renderize o preview da entidade
+    if (selectedEntity) {
+        window.draw(entityPreview);
+    }
+
     if (selectedEntity && selectedTileIndex >= 0) {
         window.draw(entityPreview);
     }
@@ -549,7 +584,7 @@ void Editor::toggleSelectedNodeRecursive(FileNode& node, int& currentIndex) {
 }
 
 void Editor::drawFloatingWindow() {
-    std::cout << "Desenhando janela flutuante" << std::endl;
+    //std::cout << "Desenhando janela flutuante" << std::endl;
     if (!selectedEntity) {
         std::cout << "Nenhuma entidade selecionada para desenhar janela flutuante" << std::endl;
         return;
@@ -605,7 +640,7 @@ void Editor::drawFloatingWindow() {
                 }
             }
         }
-    } else {
+        } else {
         sf::Vector2f collisionSize = selectedEntity->getCollisionSize();
         float scaleX = (windowWidth - 40) / collisionSize.x;
         float scaleY = (windowHeight - 80) / collisionSize.y;
@@ -622,7 +657,17 @@ void Editor::drawFloatingWindow() {
         
         window.draw(collisionShape);
 
-        sf::Text infoText("Entidade apenas com colisão", font, 16);
+        sf::Texture invisibleTexture;
+        if (invisibleTexture.loadFromFile("entities/invisible.png")) {
+            sf::Sprite invisibleSprite(invisibleTexture);
+            invisibleSprite.setPosition(
+                floatingWindowPosition.x + (windowWidth - invisibleTexture.getSize().x) / 2,
+                floatingWindowPosition.y + 60
+            );
+            window.draw(invisibleSprite);
+        }
+
+        sf::Text infoText("Entidade invisível", font, 16);
         infoText.setPosition(floatingWindowPosition.x + 10, floatingWindowPosition.y + 40);
         infoText.setFillColor(sf::Color::Black);
         window.draw(infoText);
@@ -640,42 +685,95 @@ void Editor::updatePlacedEntitySpriteFrame(Entity* entity, int tileIndex) {
 }
 
 void Editor::placeEntity(sf::Vector2i mousePos) {
-    if (!selectedEntity || selectedTileIndex < 0) {
-        std::cout << "Não foi possível colocar a entidade. selectedEntity: " << (selectedEntity ? "true" : "false")
-                  << ", selectedTileIndex: " << selectedTileIndex << std::endl;
+    if (!selectedEntity) {
+        std::cout << "Não foi possível colocar a entidade. Nenhuma entidade selecionada." << std::endl;
         return;
     }
 
-    sf::Vector2f adjustedPos(mousePos.x - editArea.getPosition().x, mousePos.y - editArea.getPosition().y);
-    int gridX = static_cast<int>(adjustedPos.x / gridSize) * gridSize;
-    int gridY = static_cast<int>(adjustedPos.y / gridSize) * gridSize;
+    // Calcula a posição relativa à área de edição
+    sf::Vector2f relativePos(mousePos.x - editArea.getPosition().x, mousePos.y - editArea.getPosition().y);
+
+    // Alinha à grade
+    int gridX = static_cast<int>(relativePos.x / gridSize) * gridSize;
+    int gridY = static_cast<int>(relativePos.y / gridSize) * gridSize;
 
     auto newEntity = std::make_unique<Entity>(*selectedEntity);
-    newEntity->setPosition(editArea.getPosition().x + gridX, editArea.getPosition().y + gridY);
     
-    updatePlacedEntitySpriteFrame(newEntity.get(), selectedTileIndex);
+    // Define a posição da entidade em relação à área de edição
+    newEntity->setPosition(gridX, gridY);
+    
+    if (selectedEntity->hasSprite() && selectedTileIndex >= 0) {
+        const auto& spriteDefinitions = selectedEntity->getSpriteDefinitions();
+        if (selectedTileIndex < spriteDefinitions.size()) {
+            newEntity->setTextureRect(spriteDefinitions[selectedTileIndex].rect);
+            newEntity->setSelectedTileIndex(selectedTileIndex);
+        }
+    } else {
+        // Para entidades invisíveis, use o tamanho da colisão
+        sf::Vector2f collisionSize = selectedEntity->getCollisionSize();
+        newEntity->setTextureRect(sf::IntRect(0, 0, collisionSize.x, collisionSize.y));
+        newEntity->setSelectedTileIndex(0);
+    }
 
     placedEntities.push_back(std::move(newEntity));
 
-    std::cout << "Entidade colocada na posição: (" << (editArea.getPosition().x + gridX) << ", " << (editArea.getPosition().y + gridY) << ")" << std::endl;
+    std::cout << "Entidade " << (selectedEntity->hasSprite() ? "" : "invisível ")
+              << "colocada na posição: (" << gridX << ", " << gridY << ")" << std::endl;
     std::cout << "Total de entidades colocadas: " << placedEntities.size() << std::endl;
 }
 
 void Editor::updateEntityPreview(sf::Vector2i mousePos) {
-    if (selectedEntity && selectedTileIndex >= 0 && editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+    if (selectedEntity && editArea.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
         sf::Vector2f adjustedPos(mousePos.x - editArea.getPosition().x, mousePos.y - editArea.getPosition().y);
+
+        // Alinha à grade
         int gridX = static_cast<int>(adjustedPos.x / gridSize) * gridSize;
         int gridY = static_cast<int>(adjustedPos.y / gridSize) * gridSize;
 
+        // Define a posição do preview
         entityPreview.setPosition(editArea.getPosition().x + gridX, editArea.getPosition().y + gridY);
         
-        const auto& spriteDefinitions = selectedEntity->getSpriteDefinitions();
-        if (selectedTileIndex < spriteDefinitions.size()) {
-            entityPreview.setTextureRect(spriteDefinitions[selectedTileIndex].rect);
+        if (selectedEntity->hasSprite()) {
+            const auto& spriteDefinitions = selectedEntity->getSpriteDefinitions();
+            if (selectedTileIndex >= 0 && selectedTileIndex < spriteDefinitions.size()) {
+                entityPreview.setTextureRect(spriteDefinitions[selectedTileIndex].rect);
+            }
+            entityPreview.setTexture(*selectedEntity->getTexture());
+            entityPreview.setColor(sf::Color(255, 255, 255, 128)); // Semi-transparente
+        } else {
+            // Para entidades invisíveis, use o tamanho da colisão
+            sf::Vector2f collisionSize = selectedEntity->getCollisionSize();
+            entityPreview.setTexture(sf::Texture());  // Remove a textura
+            entityPreview.setTextureRect(sf::IntRect(0, 0, collisionSize.x, collisionSize.y));
+            entityPreview.setColor(sf::Color(200, 0, 0, 128));  // Vermelho semi-transparente
         }
+    }
+}
 
-        entityPreview.setTexture(*selectedEntity->getTexture());
-        entityPreview.setColor(sf::Color(255, 255, 255, 128)); // Semi-transparente
+void Editor::renderInvisibleEntity(sf::RenderWindow& window, const Entity* entity) {
+    sf::Vector2f entityPos = entity->getPosition();
+    entityPos.x += editArea.getPosition().x;
+    entityPos.y += editArea.getPosition().y;
+    sf::Vector2f entitySize = entity->getCollisionSize();
+
+    sf::RectangleShape shape(entitySize);
+    shape.setPosition(entityPos);
+    shape.setFillColor(sf::Color(200, 0, 0, 128));  // Vermelho semi-transparente
+    shape.setOutlineColor(sf::Color::Red);
+    shape.setOutlineThickness(1);
+    window.draw(shape);
+
+    static sf::Texture invisibleTexture;
+    static bool textureLoaded = false;
+    if (!textureLoaded) {
+        textureLoaded = invisibleTexture.loadFromFile("entities/invisible.png");
+    }
+    
+    if (textureLoaded) {
+        sf::Sprite invisibleSprite(invisibleTexture);
+        invisibleSprite.setPosition(entityPos);
+        invisibleSprite.setScale(entitySize.x / invisibleTexture.getSize().x, entitySize.y / invisibleTexture.getSize().y);
+        window.draw(invisibleSprite);
     }
 }
 
@@ -778,4 +876,27 @@ void Editor::saveScene(const std::string& filename) {
 
     file.close();
     std::cout << "Cena salva em " << filename << std::endl;
+}
+
+void Editor::updateGridSize() {
+    currentGridSize = sf::Vector2f(32, 32);  // Tamanho fixo da grade
+}
+
+void Editor::toggleGrid() {
+    showGrid = !showGrid;
+}
+
+void Editor::drawGrid() {
+    if (!showGrid) return;
+
+    sf::VertexArray lines(sf::Lines);
+    for (float x = editArea.getPosition().x; x <= editArea.getPosition().x + editArea.getSize().x; x += currentGridSize.x) {
+        lines.append(sf::Vertex(sf::Vector2f(x, editArea.getPosition().y), sf::Color(200, 200, 200, 100)));
+        lines.append(sf::Vertex(sf::Vector2f(x, editArea.getPosition().y + editArea.getSize().y), sf::Color(200, 200, 200, 100)));
+    }
+    for (float y = editArea.getPosition().y; y <= editArea.getPosition().y + editArea.getSize().y; y += currentGridSize.y) {
+        lines.append(sf::Vertex(sf::Vector2f(editArea.getPosition().x, y), sf::Color(200, 200, 200, 100)));
+        lines.append(sf::Vertex(sf::Vector2f(editArea.getPosition().x + editArea.getSize().x, y), sf::Color(200, 200, 200, 100)));
+    }
+    window.draw(lines);
 }

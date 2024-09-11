@@ -154,10 +154,65 @@ void Entity::draw(sf::RenderWindow& window) const {
     window.draw(sprite);
 }
 
+bool Entity::hasSprite() const {
+    return !spritePath.empty();
+}
+
+sf::Vector2f Entity::getSize() const {
+    if (hasSprite()) {
+        return sf::Vector2f(sprite.getTextureRect().width, sprite.getTextureRect().height);
+    } else {
+        return getCollisionSize();
+    }
+}
+
+sf::Vector2f Entity::getCollisionSize() const {
+    if (collisionSize.x > 0 && collisionSize.y > 0) {
+        return collisionSize;
+    } else {
+        return sf::Vector2f(64, 64);  // Tamanho padrão para entidades invisíveis
+    }
+}
+
 sf::Vector2f Entity::getPosition() const {
     return sprite.getPosition();
 }
 
 void Entity::setPosition(float x, float y) {
     sprite.setPosition(x, y);
+}
+
+bool Entity::loadFromFile(const std::string& filename) {
+    tinyxml2::XMLDocument doc;
+    if (doc.LoadFile(filename.c_str()) != tinyxml2::XML_SUCCESS) {
+        std::cerr << "Falha ao carregar o arquivo: " << filename << std::endl;
+        return false;
+    }
+
+    tinyxml2::XMLElement* root = doc.FirstChildElement("Ethanon");
+    if (!root) {
+        std::cerr << "Arquivo XML inválido: " << filename << std::endl;
+        return false;
+    }
+
+    tinyxml2::XMLElement* entityElement = root->FirstChildElement("Entity");
+    if (!entityElement) {
+        std::cerr << "Elemento 'Entity' não encontrado: " << filename << std::endl;
+        return false;
+    }
+
+    // Carregar o tamanho da colisão
+    tinyxml2::XMLElement* collisionElement = entityElement->FirstChildElement("Collision");
+    if (collisionElement) {
+        tinyxml2::XMLElement* sizeElement = collisionElement->FirstChildElement("Size");
+        if (sizeElement) {
+            float width = sizeElement->FloatAttribute("x");
+            float height = sizeElement->FloatAttribute("y");
+            collisionSize = sf::Vector2f(width, height);
+        }
+    }
+
+    // ... (resto do código de carregamento)
+
+    return true;
 }
